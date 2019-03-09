@@ -1,0 +1,25 @@
+{
+  "name": "nordvpn",
+  "version": "1.0.0",
+  "description": "nordvpn linux client",
+  "main": "index.js",
+  "bin": "index.js",
+  "scripts": {
+    "start": "index.js",
+    "build-linux": "pkg -t node10-linux --out-path ./dist ."
+  },
+  "keywords": [
+    "nordvpn"
+  ],
+  "author": "Ahmed Ali",
+  "license": "ISC",
+  "dependencies": {
+    "inquirer": "^6.2.2",
+    "inquirer-autocomplete-prompt": "^1.0.1",
+    "lodash": "^4.17.11",
+    "request": "^2.88.0"
+  },
+  "devDependencies": {
+    "pkg": "^4.3.7"
+  }
+}

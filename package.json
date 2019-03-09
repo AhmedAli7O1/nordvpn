@@ -1,6 +1,6 @@
 {
   "name": "nordvpn",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "linux client for nordvpn",
   "main": "index.js",
   "bin": "index.js",

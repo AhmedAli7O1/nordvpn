@@ -1,59 +1,70 @@
-"use strict";
+'use strict';
 
-const logger = require("./logger");
-const _ = require("lodash");
+const { countries } = require('./nordvpn-config');
+const cli = require('./cli');
 const { get } = require("./request");
-const inquirer = require("inquirer");
-inquirer.registerPrompt('autocomplete', require('inquirer-autocomplete-prompt'));
+const logger = require("./logger");
+const fs = require('fs');
+const util = require('util');
+
+const writeFile = util.promisify(fs.writeFile);
 
 
-async function getServers () {
-  return await get("https://nordvpn.com/api/server", true);
+async function selectCountry() {
+  return await cli.autocomplete(countries.map(x => x.name));
 }
 
-function autocompleteFilter (list) {
-  return function (answers, input) {
-    return new Promise(resolve => {
-      if (!input) resolve(list);
-
-      resolve(_.filter(list, item => {
-        return item.toLowerCase().indexOf(input.toLowerCase()) > -1;
-      }));
-    });
+function getCountryId(countryName) {
+  const countryInfo = countries.find(x => x.name === countryName);
+  if (countryInfo) {
+    return countryInfo.id;
   }
 }
 
-async function selectServer (servers) {
+async function getBestServer(countryId) {
+  const servers = await get(`https://api.nordvpn.com/v1/servers/recommendations?filters\[country_id\]=${countryId}&limit=1`, true);
 
-  const countryList = _.uniq(_.map(servers, "country"));
-  const protocols = ["tcp", "udp"];
+  if (servers && servers.length) {
+    return servers[0];
+  }
+}
 
-  const { country, protocol } = await inquirer.prompt([
-    {
-      type: "autocomplete",
-      name: "country",
-      message: "search for a country:",
-      source: autocompleteFilter(countryList)
-    },
-    {
-      type: "autocomplete",
-      name: "protocol",
-      message: "preferred protocol:",
-      source: autocompleteFilter(protocols)
+async function getOpenVpnConfig(server) {
+  const protocols = [];
+
+  server.technologies.forEach(protocol => {
+    if (protocol.identifier.indexOf('tcp') > -1) {
+      protocols.push('tcp');
     }
-  ]);
-
-  const avaliableServers = _.filter(servers, x => {
-    return x.country === country && x.features[`openvpn_${protocol}`];
+    else if (protocol.identifier.indexOf('udp') > -1) {
+      protocols.push('udp');
+    }
   });
 
-  const selectedServer = _.head(_.sortBy(avaliableServers, "load"));
-  selectedServer.protocol = protocol;
+  const protocol = await cli.autocomplete(protocols);
 
-  return selectedServer;
+  return get(`https://downloads.nordcdn.com/configs/files/ovpn_${protocol}/servers/${server.hostname}.${protocol}.ovpn`, false);
+}
+
+function applyAuth(ovpnConfig, authPath) {
+  return ovpnConfig.replace("auth-user-pass", `auth-user-pass ${authPath}`);
+}
+
+async function setupOpenVpn(configPath, authPath) {
+  const country = await selectCountry();
+  const countryId = getCountryId(country);
+  const server = await getBestServer(countryId);
+  let ovpnConfig = await getOpenVpnConfig(server);
+  ovpnConfig = applyAuth(ovpnConfig, authPath);
+  await writeFile(configPath, ovpnConfig);
+
+  logger.info("**************** Selected Server *****************");
+  logger.info(`Name:     ${server.name}`);
+  logger.info(`hostname: ${server.hostname}`);
+  logger.info(`Load:     ${server.load}`);
+  logger.info("**************************************************");
 }
 
 module.exports = {
-  getServers,
-  selectServer
+  setupOpenVpn
 };

@@ -21,7 +21,18 @@ async function startOpenVpn (configPath) {
         errorMsg = "SUDO";
       }
 
-      logger.info(message);
+      if (process.argv.includes('debug')) {
+        logger.debug(message);
+      }
+
+      const restarting = message.match(/Restart pause, [0-9]+ second\(s\)/g);
+
+      if (restarting) {
+        logger.warn(restarting[0]);
+      }
+      else if(message.indexOf("Initialization Sequence Completed") > -1) {
+        logger.info('VPN Connected!');
+      }
     });
 
     openvpn.stderr.on('data', (data) => {
